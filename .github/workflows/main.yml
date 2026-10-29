@@ -1,10 +1,7 @@
 name: Build Starl APK
 
-on:
+'on':
   workflow_dispatch:
-
-permissions:
-  contents: read
 
 jobs:
   build:
@@ -14,37 +11,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Find and extract project ZIP
-        run: |
-          ZIP=$(find . -maxdepth 2 -type f -iname "*.zip" | head -n 1)
-          if [ -z "$ZIP" ]; then
-            echo "ERROR: No project ZIP found in repository."
-            exit 1
-          fi
-          mkdir extracted
-          unzip -q "$ZIP" -d extracted
-
-      - name: Locate Android project
-        run: |
-          WRAPPER=$(find extracted -type f -name gradlew | head -n 1)
-          if [ -z "$WRAPPER" ]; then
-            echo "ERROR: ZIP must contain a complete Android project with gradlew."
-            exit 1
-          fi
-          echo "PROJECT_DIR=$(dirname "$WRAPPER")" >> "$GITHUB_ENV"
-
-      - name: Set up JDK
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Build APK
+      - name: Find project ZIP
+        id: locate
         run: |
-          cd "$PROJECT_DIR"
+          ZIP=$(find . -maxdepth 2 -type f -iname '*.zip' | head -n 1)
+          if [ -z "$ZIP" ]; then
+            echo "No ZIP found in repository root."
+            exit 1
+          fi
+          mkdir -p extracted
+          unzip -q "$ZIP" -d extracted
+          WRAPPER=$(find extracted -type f -name gradlew | head -n 1)
+          if [ -z "$WRAPPER" ]; then
+            echo "No gradlew found inside ZIP. It must contain the full Android project."
+            exit 1
+          fi
+          echo "project_dir=$(dirname "$WRAPPER")" >> "$GITHUB_OUTPUT"
+
+      - name: Build debug APK
+        run: |
+          cd "${{ steps.locate.outputs.project_dir }}"
           chmod +x gradlew
           ./gradlew assembleDebug
 
